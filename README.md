@@ -3,10 +3,6 @@
 
 ChuangMi IR Remote plugin for HomeBridge.   
 
-欢迎加入我们的QQ群 545171648 讨论  
-QQ Group:545171648  
-Telegram Group: https://t.me/joinchat/EujYfA-JKSwpRlXURD1t6g
-
 ## Installation
 1. Install HomeBridge, please follow it's [README](https://github.com/nfarina/homebridge/blob/master/README.md).   
 If you are using Raspberry Pi, please read [Running-HomeBridge-on-a-Raspberry-Pi](https://github.com/nfarina/homebridge/wiki/Running-HomeBridge-on-a-Raspberry-Pi).   
