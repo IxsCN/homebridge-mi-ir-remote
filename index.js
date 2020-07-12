@@ -134,9 +134,13 @@ MiRemotePlatform.prototype.getMiioDevice = function (configarray, dthat) {
                 dthat.device = device;
                 //that.log.debug("Linked To " + configarray.address);
             })
-            .catch(err => console.log('Error occurred:', err));
+            .catch(err => {
+                console.log('Error occurred:', err);
+                setTimeout(() => { dthat.platform.getMiioDevice(configarray, dthat) }, 60000);
+            });
         //this.log.debug("Lowercase Success！");
     } catch (e) {
         //this.log.debug("Lowercase failed");
+        setTimeout(() => { dthat.platform.getMiioDevice(configarray, dthat) }, 60000);
     }
 }
