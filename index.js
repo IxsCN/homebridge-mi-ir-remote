@@ -1,126 +1,142 @@
-/* eslint-disable global-require */
-/* eslint-disable import/no-dynamic-require */
-require("./Devices/MiRemoteirLearn");
-require("./Devices/MiRemoteSwitch");
-require("./Devices/MiRemoteCustom");
-require("./Devices/MiRemoteLight");
-require("./Devices/MiRemoteProjector");
-require("./Devices/MiRemoteAirConditioner");
-require("./Devices/MiRemoteMomentarySwitch");
+require("./devices/ir-remote-learn");
+require("./devices/ir-remote-switch");
+require("./devices/ir-remote-custom-switch");
+require("./devices/ir-remote-light");
+require("./devices/ir-remote-projector");
+require("./devices/ir-remote-momentary-switch");
+require("./devices/ir-remote-air-conditioner");
+require("./devices/lg-air-conditioner");
 
-// eslint-disable-next-line import/no-unresolved
-const miio = require("miio");
-const {version} = require("./package.json");
+const miio = require('miio');
+var homebridgeAPI;
 
-let HomebridgeAPI;
-
-function checkPlatformConfig(homebridge, platform) {
-  const {platforms} = require(`${homebridge.user.configPath()}`);
-  return Object.values(platforms).some(({platform: currentPlatform}) => currentPlatform === platform);
+module.exports = function (homebridge) {
+    if (!checkPlatformConfig(homebridge, "MiRemote")) return;
+    homebridgeAPI = homebridge
+    homebridge.registerPlatform('homebridge-mi-remote', 'MiRemote', MiRemotePlatform, true);
 }
 
-module.exports = function(homebridge) {
-  if (!checkPlatformConfig(homebridge, "ChuangmiIRPlatform")) {
-    return;
-  }
 
-  HomebridgeAPI = homebridge;
+function checkPlatformConfig(homebridge, platform) {
+    const { platforms } = require(`${homebridge.user.configPath()}`);
+    return Object.values(platforms).some(({ platform: currentPlatform }) => currentPlatform === platform);
+}
 
-  HomebridgeAPI.registerPlatform("homebridge-mi-ir-remote", "ChuangmiIRPlatform", ChuangmiIRPlatform, true);
-};
-
-class ChuangmiIRPlatform {
-  constructor(log, config, api) {
-    if (config == null) {
-      return;
+function MiRemotePlatform(log, config, api) {
+    if (null == config) {
+        return;
     }
-    this.HomebridgeAPI = HomebridgeAPI;
+
+    this.HomebridgeAPI = homebridgeAPI;
+
     this.log = log;
+
     this.config = config;
-    this.api = api;
-
-    this.api.on(
-      "didFinishLaunching",
-      function() {
-        this.log.info("Done!");
-      }.bind(this)
-    );
-
-    this.log.info("Loading v%s ", version);
-  }
-
-  accessories(callback) {
-    const LoadedAccessories = [];
-    if (this.config.hidelearn == false) {
-      LoadedAccessories.push(new MiRemoteirLearn(this, this.config.learnconfig));
+    if (!this.config.ip) {
+        if (!this.config.host) throw new Error('You must provide host IP address of the device.');
+        else this.config.ip = this.config.host;
     }
-    const {deviceCfgs} = this.config;
+    if (!this.config.token) {
+        throw new Error('You must provide token of the device.');
+    }
+
+    this.api = api;
+    this.api.on('didFinishLaunching', () => {
+        this.log.info("Done!");
+        let device={}
+        this.getMiioDevice({address: this.config.ip, token: this.config.token}, device)
+        let self=this
+        setInterval(function(){
+            device.device
+              .call("miIO.ir_play", {freq: 38400, code: 'nMwmcwlk0'})
+              self.log.info(`keepalive`);
+	    }, 10000)
+    });
+
+    //this.log.info("Loading v%s ",require("./package.json").version);
+
+}
+
+MiRemotePlatform.prototype.accessories = function (callback) {
+    var LoadedAccessories = [];
+    if (!this.config.hideLearn && !this.config.hidelearn) {
+        LoadedAccessories.push(new MiRemoteLearn(this, {
+                ip: this.config.ip,
+                token: this.config.token
+            }));
+    }
+    var deviceCfgs = this.config.deviceCfgs;
 
     if (deviceCfgs instanceof Array) {
-      for (let i = 0; i < deviceCfgs.length; i++) {
-        const deviceCfg = deviceCfgs[i];
-        if (
-          deviceCfg.type == null ||
-          deviceCfg.type == "" ||
-          deviceCfg.token == null ||
-          deviceCfg.token == "" ||
-          deviceCfg.ip == null ||
-          deviceCfg.ip == ""
-        ) {
-          continue;
-        }
+        for (var i = 0; i < deviceCfgs.length; i++) {
+            var deviceCfg = deviceCfgs[i];
+            if (deviceCfg.type == null || deviceCfg.type == "") continue;
+            if (deviceCfg.ip == null || deviceCfg.ip == "") deviceCfg.ip = this.config.ip;
+            if (deviceCfg.token == null || deviceCfg.token == "") deviceCfg.token = this.config.token;
 
-        switch (deviceCfg.type) {
-          case "Switch":
-            LoadedAccessories.push(new MiRemoteSwitch(this, deviceCfg));
-            break;
-          case "Light":
-            LoadedAccessories.push(new MiRemoteLight(this, deviceCfg));
-            break;
-          case "Projector":
-            LoadedAccessories.push(new MiRemoteProjector(this, deviceCfg));
-            break;
-          case "AirConditioner":
-            LoadedAccessories.push(new MiRemoteAirConditioner(this, deviceCfg));
-            break;
-          case "Custom":
-            LoadedAccessories.push(new MiRemoteCustom(this, deviceCfg));
-            break;
-          case "MomentarySwitch":
-            LoadedAccessories.push(new MiRemoteMomentarySwitch(this, deviceCfg));
-            break;
-          default:
-            this.log.error(`device type: ${deviceCfg.type}Unexist!`);
-            break;
+            switch (deviceCfg.type) {
+                case "Switch":
+                    if (deviceCfg.Name == null || deviceCfg.Name == "") deviceCfg.Name = deviceCfg.name || deviceCfg.type;
+                    if (deviceCfg.data == null || deviceCfg.data == "") continue;
+                    LoadedAccessories.push(new MiRemoteSwitch(this, deviceCfg));
+                    break;
+                case "Light":
+                    if (deviceCfg.Name == null || deviceCfg.Name == "") deviceCfg.Name = deviceCfg.name || deviceCfg.type;
+                    if (deviceCfg.data == null || deviceCfg.data == "") continue;
+                    LoadedAccessories.push(new MiRemoteLight(this, deviceCfg));
+                    break;
+                case "Projector":
+                    if (deviceCfg.Name == null || deviceCfg.Name == "") deviceCfg.Name = deviceCfg.name || deviceCfg.type;
+                    if (deviceCfg.data == null || deviceCfg.data == "") continue;
+                    if (deviceCfg.data.interval != null) deviceCfg.interval = deviceCfg.data.interval;
+                    if (deviceCfg.interval == null || deviceCfg.interval == "") continue;
+                    LoadedAccessories.push(new MiRemoteProjector(this, deviceCfg));
+                    break;
+                case "AirConditioner":
+                    if (deviceCfg.Name == null || deviceCfg.Name == "") deviceCfg.Name = deviceCfg.name || deviceCfg.type;
+                    if (deviceCfg.data == null || deviceCfg.data == "") continue;
+                    if (deviceCfg.DefaultTemperature == null) if (deviceCfg.data.DefaultTemperature != null) deviceCfg.DefaultTemperature = deviceCfg.data.DefaultTemperature;
+                    if (deviceCfg.MinTemperature == null) if (deviceCfg.data.MinTemperature != null) deviceCfg.MinTemperature = deviceCfg.data.MinTemperature;
+                    if (deviceCfg.MaxTemperature == null) if (deviceCfg.data.MaxTemperature != null) deviceCfg.MaxTemperature = deviceCfg.data.MaxTemperature;
+                    LoadedAccessories.push(new MiRemoteAirConditioner(this, deviceCfg));
+                    break;
+                case "Custom":
+                    if (deviceCfg.Name == null || deviceCfg.Name == "") deviceCfg.Name = deviceCfg.name || deviceCfg.type;
+                    if (deviceCfg.data == null || deviceCfg.data == "") continue;
+                    LoadedAccessories.push(new MiRemoteCustom(this, deviceCfg));
+                    break;
+                case "MomentarySwitch":
+                    if (deviceCfg.Name == null || deviceCfg.Name == "") deviceCfg.Name = deviceCfg.name || deviceCfg.type;
+                    if (deviceCfg.data == null || deviceCfg.data == "") continue;
+                    LoadedAccessories.push(new MiRemoteMomentarySwitch(this, deviceCfg));
+                    break;
+                case "LGAirConditioner":
+                    LoadedAccessories.push(new LGAirConditioner(this, deviceCfg));
+                    break;
+                default:
+                    this.log.error("Unsupported device type:", deviceCfg.type);
+                    break;
+            }
+
         }
-      }
-      this.log.info(`Loaded accessories: ${LoadedAccessories.length}`);
+        this.log.info("Loaded accessories: " + LoadedAccessories.length);
     }
 
     callback(LoadedAccessories);
-  }
+}
 
-  getMiioDevice(configarray, dthat) {
-    let device = "";
-    const that = this;
+MiRemotePlatform.prototype.getMiioDevice = function (configarray, dthat) {
+    let device;
     try {
-      device = new miio.Device(configarray);
-      dthat.device = device;
-      dthat.readydevice = true;
-      this.log.debug("Uppercase Success！");
-      return device;
+        device = new miio.device(configarray)
+            .then(function (device) {
+                dthat.readydevice = true;
+                dthat.device = device;
+                //that.log.debug("Linked To " + configarray.address);
+            })
+            .catch(err => console.log('Error occurred:', err));
+        //this.log.debug("Lowercase Success！");
     } catch (e) {
-      this.log.debug("Uppercase failed");
+        //this.log.debug("Lowercase failed");
     }
-    try {
-      device = new miio.device(configarray).then(function(device) {
-        dthat.readydevice = true;
-        dthat.device = device;
-        that.log.debug(`Linked To ${configarray.address}`);
-      });
-      this.log.debug("Lowercase Success！");
-    } catch (e) {
-      this.log.debug("Lowercase failed");
-    }
-  }
 }
